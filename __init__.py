@@ -62,11 +62,11 @@ def obj2tet(obj,args):
 
 class MIOTET_OT_tetgen_import(bpy.types.Operator):
     bl_idname = "miotet.tetgen_import"
-    bl_label = "Miotet:Tetgen Import"
+    bl_label = "Miotet:Tetgen IO"
     bl_options = {"REGISTER","UNDO"}
     filepath = bpy.props.StringProperty()
     filter_glob = bpy.props.StringProperty(default="*.node", options={'HIDDEN'})
-    conv_args = bpy.props.StringProperty(default="-pq1.414a.1")
+    conv_args = bpy.props.StringProperty(default="-pq1.414a.1O10")
     def invoke(self,context,event):
         if context.active_object and context.active_object.type == "MESH":
             self.filepath = obj2tet(context.active_object,self.conv_args)
@@ -97,7 +97,7 @@ class MIOTET_OT_tetgen_import(bpy.types.Operator):
         fcount,idk = map(int,fh.split())
         elemct,npertet,rgnattr = map(int,eh.split())
         vertices = list(list(map(float,_.split()[1:])) for _ in vd)
-        faces = []#list(list(map(int,_.split()[1:-1])) for _ in fd)
+        faces = []
         elems = list(list(map(int,_.split()[1:])) for _ in ed)
         for e in elems:
             faces.append([e[0],e[1],e[2]])
