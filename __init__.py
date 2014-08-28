@@ -44,6 +44,8 @@ import subprocess
 import re
 
 commented = re.compile("^\s*#.*").match
+here = os.path.dirname(__file__)
+inbuilt_tetbin = os.path.join(here,"tetgen")
 
 def read_tetgen_output(f):
     tdata = open(f,"r").readlines() 
@@ -51,13 +53,11 @@ def read_tetgen_output(f):
     (header,*data) = validlines
     return header,data
 
-def obj2tet(obj,args):
+def obj2tet(tetbin,obj,args):
     tempdir = bpy.app.tempdir
-    here = os.path.dirname(__file__)
     tempfile = os.path.join(tempdir,obj.name + ".ply")
     tempnode = os.path.join(tempdir,obj.name + ".1.node")
     bpy.ops.export_mesh.ply(filepath=tempfile)
-    tetbin = os.path.join(here,"tetgen")
     tetcmd = [tetbin]
     tetargs = args.split()
     tetcmd.extend(tetargs)
@@ -79,7 +79,10 @@ class MIOTET_OT_tetgen_io(bpy.types.Operator):
     conv_args = bpy.props.StringProperty(default="-pq1.414a.1O10")
     def invoke(self,context,event):
         if context.active_object and context.active_object.type == "MESH":
-            self.filepath = obj2tet(context.active_object,self.conv_args)
+            tet_binpath = context.user_preferences.addons["miotet"].preferences.tetpath
+            tet_input_obj = context.active_object
+            tet_args = self.conv_args
+            self.filepath = obj2tet(tet_binpath,tet_input_obj,tet_args)
             if not os.path.isfile(self.filepath):
                 return {"CANCELLED"}
             else:
@@ -130,15 +133,32 @@ class MIOTET_PT_miotet_panel(bpy.types.Panel):
 
 class Miotet(bpy.types.AddonPreferences):
     bl_idname = __package__
+    use_inbuilt_binary = bpy.props.BoolProperty(default=os.sys.platform=="darwin")
+    path_to_tetgen_binary = bpy.props.StringProperty(subtype="FILE_PATH")
     arguments = bpy.props.StringProperty(default="-p:-pq:-pqO10:-pq1.414a.1O10")
+    @property
+    def tetpath(self):
+        if self.use_inbuilt_binary:
+            return inbuilt_tetbin
+        else:
+            return self.path_to_tetgen_binary
+
     def draw(self,context):
-        self.layout.label("Multiple entries may be separated by commas.")
-        self.layout.separator()
-        self.layout.prop(self,"arguments")
-        self.layout.separator()
-        box = self.layout.box()
+        layout = self.layout
+        layout.label("Multiple entries may be separated by commas.")
+        layout.separator()
+        layout.prop(self,"arguments")
+        layout.separator()
+        box = layout.box()
         for arg in self.arguments.split(":"):
             box.label(arg)
+        layout.separator()
+        box = layout.box()
+        layout.prop(self,"use_inbuilt_binary")
+        row = layout.row()
+        row.enabled = not self.use_inbuilt_binary
+        row.prop(self,"path_to_tetgen_binary")
+        layout.label(self.tetpath)
 
 
 def register():
