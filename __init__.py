@@ -16,13 +16,23 @@
 #
 # ##### END GPL LICENSE BLOCK #####
 
+"""
+        For tetgen, credit belongs to Doctor Hang Si of WAIS [NMSC]
+
+        tetgen website:
+
+        http://wias-berlin.de/software/tetgen/
+
+"""
+
+
 bl_info = {
         "name": "miotet",
         "description":"my io for tetgen",
-        "author":"dustractor",
-        "version":(0,1),
+        "author":"dustractor@gmail.com",
+        "version":(0,3),
         "blender":(2,71,0),
-        "location":"",
+        "location":"3D-View Tools -> miotet",
         "warning":"",
         "wiki_url":"",
         "category": "Import-Export"
@@ -35,7 +45,7 @@ import re
 
 commented = re.compile("^\s*#.*").match
 
-def read_(f):
+def read_tetgen_output(f):
     tdata = open(f,"r").readlines() 
     validlines = [line.rstrip() for line in tdata if not commented(line)]
     (header,*data) = validlines
@@ -52,26 +62,28 @@ def obj2tet(obj,args):
     tetargs = args.split()
     tetcmd.extend(tetargs)
     tetcmd.append(tempfile)
-    print("tetcmd:",tetcmd)
     proc = subprocess.Popen(tetcmd,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
     outs,errs = proc.communicate()
-    print("outs:",outs)
-    print("errs:",errs)
+    if len(errs):
+        print("errs:",errs)
+        return
     return tempnode
 
 
-class MIOTET_OT_tetgen_import(bpy.types.Operator):
-    bl_idname = "miotet.tetgen_import"
+class MIOTET_OT_tetgen_io(bpy.types.Operator):
+    bl_idname = "miotet.tetgen_io"
     bl_label = "Miotet:Tetgen IO"
-    bl_options = {"REGISTER","UNDO"}
+    bl_options = {"REGISTER"}
     filepath = bpy.props.StringProperty()
     filter_glob = bpy.props.StringProperty(default="*.node", options={'HIDDEN'})
     conv_args = bpy.props.StringProperty(default="-pq1.414a.1O10")
     def invoke(self,context,event):
         if context.active_object and context.active_object.type == "MESH":
             self.filepath = obj2tet(context.active_object,self.conv_args)
-            return self.execute(context)
-            
+            if not os.path.isfile(self.filepath):
+                return {"CANCELLED"}
+            else:
+                return self.execute(context)
         else:
             context.window_manager.fileselect_add(self)
         return {'RUNNING_MODAL'}
@@ -86,34 +98,51 @@ class MIOTET_OT_tetgen_import(bpy.types.Operator):
             if t.startswith(nnpre):
                 k = t.rpartition(".")[2]
                 tx[k] = os.path.join(nodedir,t)
-
         vertfile = tx['node']
-        facefile = tx['face']
         elemfile = tx['ele']
-        vh,vd = read_(vertfile)
-        fh,fd = read_(facefile)
-        eh,ed = read_(elemfile)
+        vh,vd = read_tetgen_output(vertfile)
+        eh,ed = read_tetgen_output(elemfile)
         vcount,vdim,datalayers,boundaries = map(int,vh.split())
-        fcount,idk = map(int,fh.split())
         elemct,npertet,rgnattr = map(int,eh.split())
         vertices = list(list(map(float,_.split()[1:])) for _ in vd)
         faces = []
         elems = list(list(map(int,_.split()[1:])) for _ in ed)
         for e in elems:
-            faces.append([e[0],e[1],e[2]])
-            faces.append([e[0],e[1],e[3]])
-            faces.append([e[0],e[2],e[3]])
-            faces.append([e[1],e[2],e[3]])
+            faces.extend([[e[0],e[1],e[2]],[e[0],e[1],e[3]],[e[0],e[2],e[3]],[e[1],e[2],e[3]]])
         mesh = bpy.data.meshes.new("tetmesh")
         mesh.from_pydata(vertices,[],faces)
         ob = bpy.data.objects.new("tet",mesh)
         context.scene.objects.link(ob)
-
         return {"FINISHED"}
+
+
+class MIOTET_PT_miotet_panel(bpy.types.Panel):
+    bl_label = "tetgen io"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "TOOLS"
+    bl_category = "miotet"
+    def draw(self,context):
+        layout = self.layout
+        layout.enabled = context.active_object and context.active_object.type == "MESH"
+        for arg in context.user_preferences.addons["miotet"].preferences.arguments.split(":"):
+            layout.operator("miotet.tetgen_io",text=arg).conv_args = arg
+
+
+class Miotet(bpy.types.AddonPreferences):
+    bl_idname = __package__
+    arguments = bpy.props.StringProperty(default="-p:-pq:-pqO10:-pq1.414a.1O10")
+    def draw(self,context):
+        self.layout.label("Multiple entries may be separated by commas.")
+        self.layout.separator()
+        self.layout.prop(self,"arguments")
+        self.layout.separator()
+        box = self.layout.box()
+        for arg in self.arguments.split(":"):
+            box.label(arg)
+
 
 def register():
     bpy.utils.register_module(__name__)
-    
 
 def unregister():
     bpy.utils.unregister_module(__name__)
