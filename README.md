@@ -18,14 +18,30 @@ Invoked without a mesh object for the actively selected object, a file-select di
 
 
 
-  Change the command-line switches if you like.  Miotet's default switches are taken from an example given in tetgen --h(elp).
+Change the command-line switches if you like.  Miotet's default switches are taken from an example given in ``tetgen --help``.
+
+http://wias-berlin.de/software/tetgen/switches.html
 
 [tetgen 1.5 manual](http://wias-berlin.de/software/tetgen/1.5/doc/manual/index.html)
 
 ---
 
-miotet has included a binary that was compiled for mac osx 10.7.5 ymmv ( [tetgen compilation](http://wias-berlin.de/software/tetgen/1.5/doc/manual/manual004.html#sec25)
-)
-**sorry I have not got a windows or linux to test on.**  for linux put (or symlink) a tetgen binary in this folder and it is expected to work.  for windows: you will have to edit the code to reflect ".exe" in the naming of the executable. )
+miotet has included a binary that was compiled (long-ago) for mac osx 10.7.5 ymmv.  I don't have a mac anymore so...
 
+[tetgen compilation](http://wias-berlin.de/software/tetgen/1.5/doc/manual/manual004.html#sec25)
+
+
+
+#for linux:
+
+if tetgen is installed, it will probably be at:
+
+    /usr/bin/tetgen
+
+
+so you would have to expand the preferences for this addon and enter that path, then it should work.
+
+Simple shapes, guys.  Simple and small.  Cubes, icospheres, simple extrusions a la box-modeling...
+
+And one more thing: attempting to subdivide on the output is an instant crash no doubt about it.
 
