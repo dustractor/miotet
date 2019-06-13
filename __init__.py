@@ -31,7 +31,7 @@ bl_info = {
         "description":"my io for tetgen",
         "author":"dustractor@gmail.com",
         "version":(0,3),
-        "blender":(2,71,0),
+        "blender":(2,80,0),
         "location":"3D-View Tools -> miotet",
         "warning":"",
         "wiki_url":"",
@@ -44,9 +44,20 @@ import subprocess
 import re
 
 commented = re.compile("^\s*#.*").match
-here = os.path.dirname(__file__)
-inbuilt_tetbin = os.path.join(here,"tetgen")
+import pathlib
+import sys
+here = pathlib.Path(__file__).resolve().parent
 
+print("here:",here)
+inbuilt_tetbin = str(here/"tetgen")
+if sys.platform == "darwin":
+    pass
+elif sys.platform == "linux":
+    print("do a \n$which tetgen")
+elif sys.platform == "win32":
+    inbuilt_tetbin += ".exe"
+
+print("inbuilt_tetbin:",inbuilt_tetbin)
 def read_tetgen_output(f):
     tdata = open(f,"r").readlines() 
     validlines = [line.rstrip() for line in tdata if not commented(line)]
@@ -74,12 +85,13 @@ class MIOTET_OT_tetgen_io(bpy.types.Operator):
     bl_idname = "miotet.tetgen_io"
     bl_label = "Miotet:Tetgen IO"
     bl_options = {"REGISTER"}
-    filepath = bpy.props.StringProperty()
-    filter_glob = bpy.props.StringProperty(default="*.node", options={'HIDDEN'})
-    conv_args = bpy.props.StringProperty(default="-pq1.414a.1O10")
+    filepath: bpy.props.StringProperty()
+    filter_glob: bpy.props.StringProperty(default="*.node", options={'HIDDEN'})
+    conv_args: bpy.props.StringProperty(default="-pq1.414a.1O10")
     def invoke(self,context,event):
         if context.active_object and context.active_object.type == "MESH":
-            tet_binpath = context.user_preferences.addons["miotet"].preferences.tetpath
+            prefs = context.preferences.addons["miotet"].preferences
+            tet_binpath = prefs.path_to_tetgen_binary if not prefs.use_inbuilt_binary else inbuilt_tetbin
             tet_input_obj = context.active_object
             tet_args = self.conv_args
             self.filepath = obj2tet(tet_binpath,tet_input_obj,tet_args)
@@ -115,7 +127,7 @@ class MIOTET_OT_tetgen_io(bpy.types.Operator):
         mesh = bpy.data.meshes.new("tetmesh")
         mesh.from_pydata(vertices,[],faces)
         ob = bpy.data.objects.new("tet",mesh)
-        context.scene.objects.link(ob)
+        context.scene.collection.objects.link(ob)
         return {"FINISHED"}
 
 
@@ -123,48 +135,45 @@ class MIOTET_PT_miotet_panel(bpy.types.Panel):
     bl_label = "tetgen io"
     bl_space_type = "VIEW_3D"
     bl_region_type = "TOOLS"
-    bl_category = "miotet"
+    #bl_category = "miotet"
     def draw(self,context):
         layout = self.layout
         layout.enabled = context.active_object and context.active_object.type == "MESH"
-        for arg in context.user_preferences.addons["miotet"].preferences.arguments.split(":"):
+        for arg in context.preferences.addons["miotet"].preferences.arguments.split(":"):
             layout.operator("miotet.tetgen_io",text=arg).conv_args = arg
 
 
 class Miotet(bpy.types.AddonPreferences):
     bl_idname = __package__
-    use_inbuilt_binary = bpy.props.BoolProperty(default=os.sys.platform=="darwin")
-    path_to_tetgen_binary = bpy.props.StringProperty(subtype="FILE_PATH")
-    arguments = bpy.props.StringProperty(default="-p:-pq:-pqO10:-pq1.414a.1O10")
-    @property
-    def tetpath(self):
-        if self.use_inbuilt_binary:
-            return inbuilt_tetbin
-        else:
-            return self.path_to_tetgen_binary
+    use_inbuilt_binary: bpy.props.BoolProperty(default=True)
+    path_to_tetgen_binary: bpy.props.StringProperty(subtype="FILE_PATH")
+    arguments: bpy.props.StringProperty(default="-p:-pq:-pqO10:-pq1.414a.1O10")
 
     def draw(self,context):
         layout = self.layout
-        layout.label("Multiple entries may be separated by commas.")
+        layout.label(text="Multiple entries may be separated by commas.")
         layout.separator()
         layout.prop(self,"arguments")
         layout.separator()
         box = layout.box()
         for arg in self.arguments.split(":"):
-            box.label(arg)
+            box.label(text=arg)
         layout.separator()
         box = layout.box()
         layout.prop(self,"use_inbuilt_binary")
         row = layout.row()
         row.enabled = not self.use_inbuilt_binary
         row.prop(self,"path_to_tetgen_binary")
-        layout.label(self.tetpath)
 
 
 def register():
-    bpy.utils.register_module(__name__)
+    bpy.utils.register_class(Miotet)
+    bpy.utils.register_class(MIOTET_PT_miotet_panel)
+    bpy.utils.register_class(MIOTET_OT_tetgen_io)
 
 def unregister():
-    bpy.utils.unregister_module(__name__)
+    bpy.utils.unregister_class(Miotet)
+    bpy.utils.unregister_class(MIOTET_PT_miotet_panel)
+    bpy.utils.unregister_class(MIOTET_OT_tetgen_io)
     
 
