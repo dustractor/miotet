@@ -48,16 +48,14 @@ import pathlib
 import sys
 here = pathlib.Path(__file__).resolve().parent
 
-print("here:",here)
 inbuilt_tetbin = str(here/"tetgen")
 if sys.platform == "darwin":
     pass
 elif sys.platform == "linux":
-    print("do a \n$which tetgen")
+    pass
 elif sys.platform == "win32":
     inbuilt_tetbin += ".exe"
 
-print("inbuilt_tetbin:",inbuilt_tetbin)
 def read_tetgen_output(f):
     tdata = open(f,"r").readlines() 
     validlines = [line.rstrip() for line in tdata if not commented(line)]
