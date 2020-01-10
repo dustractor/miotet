@@ -27,11 +27,11 @@
 
 
 bl_info = {
-        "name": "miotet",
-        "description":"my io for tetgen",
+        "name": "SimpleTetgenOp",
+        "description":"Send the selected mesh to tetgen and create new mesh object from result.",
         "author":"dustractor@gmail.com",
-        "version":(0,3),
-        "blender":(2,71,0),
+        "version":(0,42),
+        "blender":(2,80,0),
         "location":"3D-View Tools -> miotet",
         "warning":"",
         "wiki_url":"",
@@ -44,8 +44,6 @@ import subprocess
 import re
 
 commented = re.compile("^\s*#.*").match
-here = os.path.dirname(__file__)
-inbuilt_tetbin = os.path.join(here,"tetgen")
 
 def read_tetgen_output(f):
     tdata = open(f,"r").readlines() 
@@ -74,12 +72,13 @@ class MIOTET_OT_tetgen_io(bpy.types.Operator):
     bl_idname = "miotet.tetgen_io"
     bl_label = "Miotet:Tetgen IO"
     bl_options = {"REGISTER"}
-    filepath = bpy.props.StringProperty()
-    filter_glob = bpy.props.StringProperty(default="*.node", options={'HIDDEN'})
-    conv_args = bpy.props.StringProperty(default="-pq1.414a.1O10")
+    filepath: bpy.props.StringProperty()
+    filter_glob: bpy.props.StringProperty(default="*.node", options={'HIDDEN'})
+    conv_args: bpy.props.StringProperty(default="-pq1.414a.1O10")
     def invoke(self,context,event):
         if context.active_object and context.active_object.type == "MESH":
-            tet_binpath = context.user_preferences.addons["miotet"].preferences.tetpath
+            prefs = context.preferences.addons["miotet"].preferences
+            tet_binpath = prefs.path_to_tetgen_binary
             tet_input_obj = context.active_object
             tet_args = self.conv_args
             self.filepath = obj2tet(tet_binpath,tet_input_obj,tet_args)
@@ -111,37 +110,34 @@ class MIOTET_OT_tetgen_io(bpy.types.Operator):
         faces = []
         elems = list(list(map(int,_.split()[1:])) for _ in ed)
         for e in elems:
-            faces.extend([[e[0],e[1],e[2]],[e[0],e[1],e[3]],[e[0],e[2],e[3]],[e[1],e[2],e[3]]])
+            faces.extend([
+                    [e[0],e[1],e[2]],
+                    [e[0],e[1],e[3]],
+                    [e[0],e[2],e[3]],
+                    [e[1],e[2],e[3]]])
         mesh = bpy.data.meshes.new("tetmesh")
         mesh.from_pydata(vertices,[],faces)
         ob = bpy.data.objects.new("tet",mesh)
-        context.scene.objects.link(ob)
+        context.collection.objects.link(ob)
         return {"FINISHED"}
 
 
 class MIOTET_PT_miotet_panel(bpy.types.Panel):
     bl_label = "tetgen io"
     bl_space_type = "VIEW_3D"
-    bl_region_type = "TOOLS"
-    bl_category = "miotet"
+    bl_region_type = "UI"
+    bl_category = "tetgen"
     def draw(self,context):
         layout = self.layout
         layout.enabled = context.active_object and context.active_object.type == "MESH"
-        for arg in context.user_preferences.addons["miotet"].preferences.arguments.split(":"):
+        for arg in context.preferences.addons["miotet"].preferences.arguments.split(":"):
             layout.operator("miotet.tetgen_io",text=arg).conv_args = arg
 
 
 class Miotet(bpy.types.AddonPreferences):
     bl_idname = __package__
-    use_inbuilt_binary = bpy.props.BoolProperty(default=os.sys.platform=="darwin")
-    path_to_tetgen_binary = bpy.props.StringProperty(subtype="FILE_PATH")
-    arguments = bpy.props.StringProperty(default="-p:-pq:-pqO10:-pq1.414a.1O10")
-    @property
-    def tetpath(self):
-        if self.use_inbuilt_binary:
-            return inbuilt_tetbin
-        else:
-            return self.path_to_tetgen_binary
+    path_to_tetgen_binary: bpy.props.StringProperty(subtype="FILE_PATH",default="tetgen")
+    arguments: bpy.props.StringProperty(default="-p:-pq:-pqO10:-pq1.414a.1O10")
 
     def draw(self,context):
         layout = self.layout
@@ -154,17 +150,19 @@ class Miotet(bpy.types.AddonPreferences):
             box.label(arg)
         layout.separator()
         box = layout.box()
-        layout.prop(self,"use_inbuilt_binary")
-        row = layout.row()
-        row.enabled = not self.use_inbuilt_binary
+        row = box.row()
         row.prop(self,"path_to_tetgen_binary")
-        layout.label(self.tetpath)
+        layout.label(self.path_to_tetgen_binary)
 
 
 def register():
-    bpy.utils.register_module(__name__)
+    bpy.utils.register_class(Miotet)
+    bpy.utils.register_class(MIOTET_OT_tetgen_io)
+    bpy.utils.register_class(MIOTET_PT_miotet_panel)
 
 def unregister():
-    bpy.utils.unregister_module(__name__)
+    bpy.utils.unregister_class(MIOTET_PT_miotet_panel)
+    bpy.utils.unregister_class(MIOTET_OT_tetgen_io)
+    bpy.utils.unregister_class(Miotet)
     
 
