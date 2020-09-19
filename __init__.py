@@ -42,8 +42,19 @@ import bpy
 import os
 import subprocess
 import re
+from pathlib import Path
+import sys
+import shlex
 
 commented = re.compile("^\s*#.*").match
+
+
+def which(exe):
+    whichexe = Path(subprocess.run(["where.exe",exe],capture_output=True).stdout.decode().strip()).resolve()
+    if whichexe.is_file():
+        return str(whichexe)
+
+default_tetgen_binary = which("tetgen")
 
 def read_tetgen_output(f):
     tdata = open(f,"r").readlines() 
@@ -52,20 +63,26 @@ def read_tetgen_output(f):
     return header,data
 
 def obj2tet(tetbin,obj,args):
-    tempdir = bpy.app.tempdir
-    tempfile = os.path.join(tempdir,obj.name + ".ply")
-    tempnode = os.path.join(tempdir,obj.name + ".1.node")
-    bpy.ops.export_mesh.ply(filepath=tempfile)
+    tempdir = Path(bpy.app.tempdir)
+    tempfile = tempdir/(obj.name + ".ply")
+    tempnode = tempdir/(obj.name + ".1.node")
+    print("export ply ...",end="")
+    bpy.ops.export_mesh.ply(filepath=str(tempfile),use_ascii=True,use_selection=True)
+    print("ply export ok")
     tetcmd = [tetbin]
-    tetargs = args.split()
+    tetargs = list(map(shlex.quote,args.split()))
     tetcmd.extend(tetargs)
-    tetcmd.append(tempfile)
+    tetcmd.append(str(tempfile))
     proc = subprocess.Popen(tetcmd,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
     outs,errs = proc.communicate()
     if len(errs):
         print("errs:",errs)
-        return
-    return tempnode
+        return "-n/a-"
+    print(outs.decode())
+    if tempnode.is_file():
+        return str(tempnode)
+    else:
+        return ""
 
 
 class MIOTET_OT_tetgen_io(bpy.types.Operator):
@@ -78,30 +95,42 @@ class MIOTET_OT_tetgen_io(bpy.types.Operator):
     def invoke(self,context,event):
         if context.active_object and context.active_object.type == "MESH":
             prefs = context.preferences.addons["miotet"].preferences
-            tet_binpath = prefs.path_to_tetgen_binary
+            tetgenbin_p = prefs.tetgenbin
+            print("tetgenbin_p:",tetgenbin_p)
             tet_input_obj = context.active_object
+            print("tet_input_obj:",tet_input_obj)
             tet_args = self.conv_args
-            self.filepath = obj2tet(tet_binpath,tet_input_obj,tet_args)
-            if not os.path.isfile(self.filepath):
+            print("tet_args:",tet_args)
+            self.filepath = obj2tet(tetgenbin_p,tet_input_obj,tet_args)
+            if not Path(self.filepath).is_file():
+                print("self.filepath:",self.filepath)
+                print("not a file!")
                 return {"CANCELLED"}
             else:
                 return self.execute(context)
         else:
             context.window_manager.fileselect_add(self)
         return {'RUNNING_MODAL'}
+
     def execute(self,context):
-        print(self,"loading",self.filepath)
-        nodefile = self.filepath
-        nodedir = os.path.dirname(nodefile)
-        nodename = os.path.basename(nodefile)
-        nnpre = nodename.rpartition(".")[0]
-        tx = {}
-        for t in os.listdir(nodedir):
-            if t.startswith(nnpre):
-                k = t.rpartition(".")[2]
-                tx[k] = os.path.join(nodedir,t)
-        vertfile = tx['node']
-        elemfile = tx['ele']
+        print("loading:",self.filepath)
+        nodefile = Path(self.filepath)
+        print("nodefile:",nodefile)
+        nodedir = nodefile.parent
+        print("nodedir:",nodedir)
+        siblings = dict()
+        
+        for p in nodedir.iterdir():
+            print("p:",p)
+            if p.stem == nodefile.stem:
+                siblings[p.suffix] = str(p)
+        print("siblings:",siblings)
+        vertfile = siblings.get(".node",None)
+        elemfile = siblings.get(".ele",None)
+        print("vertfile,elemfile:",vertfile,elemfile)
+        if not(vertfile and elemfile):
+            print("F")
+            return {"CANCELLED"}
         vh,vd = read_tetgen_output(vertfile)
         eh,ed = read_tetgen_output(elemfile)
         vcount,vdim,datalayers,boundaries = map(int,vh.split())
@@ -136,23 +165,23 @@ class MIOTET_PT_miotet_panel(bpy.types.Panel):
 
 class Miotet(bpy.types.AddonPreferences):
     bl_idname = __package__
-    path_to_tetgen_binary: bpy.props.StringProperty(subtype="FILE_PATH",default="tetgen")
+    tetgenbin: bpy.props.StringProperty(subtype="FILE_PATH",default=default_tetgen_binary)
     arguments: bpy.props.StringProperty(default="-p:-pq:-pqO10:-pq1.414a.1O10")
 
     def draw(self,context):
         layout = self.layout
-        layout.label("Multiple entries may be separated by commas.")
+        layout.label(text="Multiple entries may be separated by commas.")
         layout.separator()
         layout.prop(self,"arguments")
         layout.separator()
         box = layout.box()
         for arg in self.arguments.split(":"):
-            box.label(arg)
+            box.label(text=arg)
         layout.separator()
         box = layout.box()
         row = box.row()
-        row.prop(self,"path_to_tetgen_binary")
-        layout.label(self.path_to_tetgen_binary)
+        row.prop(self,"tetgenbin")
+        layout.label(text=self.tetgenbin)
 
 
 def register():
