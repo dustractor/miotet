@@ -27,10 +27,10 @@
 
 
 bl_info = {
-        "name": "SimpleTetgenOp",
+        "name": "Miotet",
         "description":"Send the selected mesh to tetgen and create new mesh object from result.",
         "author":"dustractor@gmail.com",
-        "version":(0,42),
+        "version":(0,43),
         "blender":(2,80,0),
         "location":"3D-View Tools -> miotet",
         "warning":"",
@@ -39,7 +39,6 @@ bl_info = {
         }
 
 import bpy
-import os
 import subprocess
 import re
 from pathlib import Path
