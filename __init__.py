@@ -30,7 +30,7 @@ bl_info = {
         "name": "Miotet",
         "description":"Send the selected mesh to tetgen and create new mesh object from result.",
         "author":"dustractor@gmail.com",
-        "version":(0,43),
+        "version":(0,44),
         "blender":(2,80,0),
         "location":"3D-View Tools -> miotet",
         "warning":"",
@@ -39,21 +39,24 @@ bl_info = {
         }
 
 import bpy
-import subprocess
-import re
+from subprocess import run,Popen,PIPE
+from re import compile as re
 from pathlib import Path
-import sys
-import shlex
+from sys import platform
+from shlex import quote
 
-commented = re.compile("^\s*#.*").match
+commented = re("^\s*#.*").match
 
 
-def which(exe):
-    whichexe = Path(subprocess.run(["where.exe",exe],capture_output=True).stdout.decode().strip()).resolve()
-    if whichexe.is_file():
-        return str(whichexe)
+def find_binary(binary_name):
+    wcmd = ["which","where.exe"][platform=="win32"]
+    binpath = Path(run([wcmd,binary_name],capture_output=True).stdout.decode().strip()).resolve()
+    if binpath.is_file():
+        return str(binpath)
+    
 
-default_tetgen_binary = which("tetgen")
+default_tetgen_binary = find_binary("tetgen")
+print("default_tetgen_binary:",default_tetgen_binary)
 
 def read_tetgen_output(f):
     tdata = open(f,"r").readlines() 
@@ -69,10 +72,10 @@ def obj2tet(tetbin,obj,args):
     bpy.ops.export_mesh.ply(filepath=str(tempfile),use_ascii=True,use_selection=True)
     print("ply export ok")
     tetcmd = [tetbin]
-    tetargs = list(map(shlex.quote,args.split()))
+    tetargs = list(map(quote,args.split()))
     tetcmd.extend(tetargs)
     tetcmd.append(str(tempfile))
-    proc = subprocess.Popen(tetcmd,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+    proc = Popen(tetcmd,stdout=PIPE,stderr=PIPE)
     outs,errs = proc.communicate()
     if len(errs):
         print("errs:",errs)
